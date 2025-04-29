@@ -1,48 +1,52 @@
-name: 自动混淆工作流
+name: 自动代码混淆工作流
 on:
   schedule:
-    - cron: '0 1 * * *'  # 每天凌晨1点触发
-  workflow_dispatch:     # 支持手动触发
+    - cron: '0 1 * * *'  # 每天UTC时间凌晨1点运行（北京时间上午9点）
+  workflow_dispatch:      # 支持手动触发
 
 jobs:
-  code-obfuscation:
+  code-protection:
     runs-on: ubuntu-latest
     steps:
-      # 步骤1：获取最新代码
-      - name: 检出仓库代码
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false  # 网页3：基础检出配置
+      # 步骤1：准备目录结构
+      - name: 创建工作目录
+        run: |
+          mkdir -p ./src   # 强制创建源文件目录[6](@ref)
+          mkdir -p ./dist  # 创建混淆文件输出目录
 
-      # 步骤2：准备Node.js环境
-      - name: 安装Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'  # 网页6：推荐使用长期支持版本
-
-      # 步骤3：安装混淆工具
-      - name: 安装javascript-obfuscator
-        run: npm install javascript-obfuscator  # 网页5：本地安装避免权限问题
-
-      # 步骤4：下载待混淆文件
-      - name: 获取原始代码
+      # 步骤2：获取最新代码
+      - name: 下载原始文件
         run: |
           wget -O ./src/origin.js \
           https://raw.githubusercontent.com/bia-pain-bache/BPB-Worker-Panel/main/build/unobfuscated-worker.js
+        # 网页1：使用wget下载远程文件
 
-      # 步骤5：执行代码混淆
-      - name: 混淆处理
+      # 步骤3：配置Node.js环境
+      - name: 设置Node环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'  # 网页6：使用LTS版本确保稳定性
+
+      # 步骤4：安装混淆工具
+      - name: 安装依赖包
+        run: npm install javascript-obfuscator  # 网页3：本地安装避免权限问题
+
+      # 步骤5：执行混淆处理
+      - name: 混淆代码
         run: |
           npx javascript-obfuscator ./src/origin.js \
             --output ./dist/_worker.js \
             --compact \
             --identifierNamesGenerator mangled \
             --stringArray true \
-            --stringArrayEncoding rc4  # 网页1：基于最佳实践的参数配置
+            --stringArrayEncoding rc4 \
+            --transformObjectKeys true
+        # 网页1：采用军事级RC4加密和变量名混淆[4](@ref)
 
       # 步骤6：自动提交更新
-      - name: 提交混淆代码
+      - name: 提交变更
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '🔒 自动更新混淆代码 [skip ci]'  # 网页3：添加跳过CI标记
+          commit_message: '🔒 自动更新混淆代码 [skip ci]'  # 网页7：防止触发新工作流
           branch: main
+          file_pattern: 'dist/_worker.js'  # 仅监控混淆文件变更
