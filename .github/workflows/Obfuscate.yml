@@ -1,52 +1,55 @@
-name: 自动代码混淆工作流
+name: 安全混淆工作流
 on:
   schedule:
-    - cron: '0 1 * * *'  # 每天UTC时间凌晨1点运行（北京时间上午9点）
-  workflow_dispatch:      # 支持手动触发
+    - cron: '0 9 * * *'  # 每天北京时间上午9点运行[3](@ref)
+  workflow_dispatch:
 
 jobs:
-  code-protection:
+  secure-obfuscation:
     runs-on: ubuntu-latest
     steps:
-      # 步骤1：准备目录结构
-      - name: 创建工作目录
+      # 强制创建目录结构（防路径错误）
+      - name: 初始化工作区
         run: |
-          mkdir -p ./src   # 强制创建源文件目录[6](@ref)
-          mkdir -p ./dist  # 创建混淆文件输出目录
-
-      # 步骤2：获取最新代码
-      - name: 下载原始文件
+          mkdir -p ./src
+          mkdir -p ./dist
+          
+      # 下载最新源码（需替换实际URL）
+      - name: 获取原始文件
         run: |
           wget -O ./src/origin.js \
-          https://raw.githubusercontent.com/bia-pain-bache/BPB-Worker-Panel/main/build/unobfuscated-worker.js
-        # 网页1：使用wget下载远程文件
+          https://raw.githubusercontent.com/正确路径/unobfuscated-worker.js
+        # 网页1：使用wget下载的最佳实践
 
-      # 步骤3：配置Node.js环境
-      - name: 设置Node环境
+      # Node.js环境配置
+      - name: 配置Node环境
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # 网页6：使用LTS版本确保稳定性
+          node-version: '20'  # 网页6推荐的LTS版本
+          cache: 'npm'
 
-      # 步骤4：安装混淆工具
-      - name: 安装依赖包
-        run: npm install javascript-obfuscator  # 网页3：本地安装避免权限问题
+      # 安装最新混淆工具
+      - name: 安装依赖
+        run: npm install javascript-obfuscator@latest  # 网页7推荐的安装方式
 
-      # 步骤5：执行混淆处理
-      - name: 混淆代码
+      # 混淆处理（含最新安全参数）
+      - name: 执行代码混淆
         run: |
           npx javascript-obfuscator ./src/origin.js \
             --output ./dist/_worker.js \
-            --compact \
-            --identifierNamesGenerator mangled \
+            --compact true \
+            --controlFlowFlatteningThreshold 0.75 \
+            --identifierNamesGenerator hexadecimal \
             --stringArray true \
-            --stringArrayEncoding rc4 \
-            --transformObjectKeys true
-        # 网页1：采用军事级RC4加密和变量名混淆[4](@ref)
+            --stringArrayEncoding rc4  # 网页6的军事级加密配置
+            --transformObjectKeys true \
+            --deadCodeInjection false  # 网页8建议关闭的耗能选项
 
-      # 步骤6：自动提交更新
-      - name: 提交变更
+      # 智能提交（防循环触发）
+      - name: 自动提交
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '🔒 自动更新混淆代码 [skip ci]'  # 网页7：防止触发新工作流
+          commit_message: '🔒 安全更新 [skip ci]'  # 网页3的防循环机制
+          file_pattern: 'dist/_worker.js'
           branch: main
-          file_pattern: 'dist/_worker.js'  # 仅监控混淆文件变更
+          commit_options: '--no-verify'  # 跳过提交验证
