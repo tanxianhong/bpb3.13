@@ -1,55 +1,48 @@
-name: Build and Obfuscate BPB Panel
-
+name: 自动混淆工作流
 on:
-  push:
-    branches:
-      - main
   schedule:
-    # 每天凌晨1:00运行
-    - cron: "0 1 * * *"
-
-permissions:
-  contents: write
+    - cron: '0 1 * * *'  # 每天凌晨1点触发
+  workflow_dispatch:     # 支持手动触发
 
 jobs:
-  build:
+  code-obfuscation:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 检出代码
+      # 步骤1：获取最新代码
+      - name: 检出仓库代码
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false  # 网页3：基础检出配置
 
-      - name: 设置 Node.js 环境
+      # 步骤2：准备Node.js环境
+      - name: 安装Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "latest"
+          node-version: '20'  # 网页6：推荐使用长期支持版本
 
-      - name: 安装依赖项
+      # 步骤3：安装混淆工具
+      - name: 安装javascript-obfuscator
+        run: npm install javascript-obfuscator  # 网页5：本地安装避免权限问题
+
+      # 步骤4：下载待混淆文件
+      - name: 获取原始代码
         run: |
-          npm install -g javascript-obfuscator
+          wget -O ./src/origin.js \
+          https://raw.githubusercontent.com/bia-pain-bache/BPB-Worker-Panel/main/build/unobfuscated-worker.js
 
-      - name: 下载 BPB worker.js
+      # 步骤5：执行代码混淆
+      - name: 混淆处理
         run: |
-          wget -O origin.js https://raw.githubusercontent.com/bia-pain-bache/BPB-Worker-Panel/main/build/unobfuscated-worker.js
+          npx javascript-obfuscator ./src/origin.js \
+            --output ./dist/_worker.js \
+            --compact \
+            --identifierNamesGenerator mangled \
+            --stringArray true \
+            --stringArrayEncoding rc4  # 网页1：基于最佳实践的参数配置
 
-      - name: 混淆 BPB worker.js
-        run: |
-          javascript-obfuscator origin.js --output _worker.js \
-            --compact true \
-            --control-flow-flattening false \
-            --dead-code-injection false \
-            --identifier-names-generator mangled \
-            --rename-globals false \
-            --string-array true \
-            --string-array-encoding 'rc4' \
-            --string-array-threshold 0.75 \
-            --transform-object-keys true \
-            --unicode-escape-sequence true
-
-      - name: 提交更改
+      # 步骤6：自动提交更新
+      - name: 提交混淆代码
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
+          commit_message: '🔒 自动更新混淆代码 [skip ci]'  # 网页3：添加跳过CI标记
           branch: main
-          commit_message: ':arrow_up: 更新最新的 BPB 面板'
-          commit_author: 'github-actions[bot] <github-actions[bot]@users.noreply.github.com>'
-          push_options: '--set-upstream'
